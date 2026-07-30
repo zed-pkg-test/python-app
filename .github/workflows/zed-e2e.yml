@@ -1,0 +1,145 @@
+name: zed e2e (python)
+
+# Proves the "complement, don't replace" model for Python: zed publishes
+# python-lib into a hermetic file:// registry, installs it into [install].dir,
+# and the interpreter imports it off the path the python adapter wrote -- while
+# pip keeps owning site-packages.
+#
+# No registry server and no secrets: the file:// registry *is* the registry.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out this app
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          path: app
+          persist-credentials: false
+
+      # zed-cli path-depends on ../zed-interfaces, so they must be siblings.
+      - name: Check out zed-cli
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          repository: zed-pkg/zed-cli
+          path: zed-cli
+          persist-credentials: false
+      - name: Check out zed-interfaces
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          repository: zed-pkg/zed-interfaces
+          path: zed-interfaces
+          persist-credentials: false
+      - name: Check out the library being consumed
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          repository: zed-pkg-test/python-lib
+          path: python-lib
+          persist-credentials: false
+
+      - name: Validate workflow
+        uses: docker://rhysd/actionlint@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667
+        with:
+          args: app/.github/workflows/zed-e2e.yml
+
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c # v6
+        with:
+          python-version: "3.12"
+
+      - name: Build the zed CLI
+        run: cargo build --release --bin zed --manifest-path zed-cli/Cargo.toml
+
+      - name: Point zed at a hermetic file registry
+        run: |
+          {
+            echo "ZED=$GITHUB_WORKSPACE/zed-cli/target/release/zed"
+            echo "ZED_PKG_REGISTRY=file://$RUNNER_TEMP/zed-reg"
+            echo "ZED_PKG_HOME=$RUNNER_TEMP/zed-home"
+          } >> "$GITHUB_ENV"
+          mkdir -p "$RUNNER_TEMP/zed-reg" "$RUNNER_TEMP/zed-home"
+
+      - name: The import fails before zed installs anything
+        working-directory: app
+        run: |
+          set -euo pipefail
+          # Establishes that the later success is actually zed's doing: nothing
+          # on the default path provides python_lib.
+          if python main.py; then
+            echo "::error::python_lib resolved without a zed install"
+            exit 1
+          fi
+
+      - name: Publish python-lib without mutating its source checkout
+        working-directory: python-lib
+        run: |
+          set -euo pipefail
+          before="$(git rev-parse HEAD)"
+          "$ZED" publish --skip-vcs-checks
+          # Publishing reads the source tree; it must never write to it.
+          test -z "$(git status --porcelain)"
+          test "$(git rev-parse HEAD)" = "$before"
+          test "$(find "$RUNNER_TEMP/zed-reg" -name '*.tar.gz' | wc -l)" -eq 1
+
+      - name: The library stands alone before anything is installed
+        working-directory: python-lib
+        run: python -m unittest discover -s tests -t . -v
+
+      - name: zed install, then let the interpreter resolve it
+        working-directory: app
+        run: |
+          set -euo pipefail
+          "$ZED" install --install-mode symlink
+          test -L .vendor/.zed/zed-pkg-test/python-lib
+          # The adapter records the path it wants on PYTHONPATH; use exactly it,
+          # rather than hardcoding [install].dir a second time here.
+          PYTHONPATH="$(cat .zed/python_path)" python main.py \
+            | tee "$RUNNER_TEMP/python-app.log"
+          grep -q 'OK: zed-sourced dep resolved' "$RUNNER_TEMP/python-app.log"
+
+      - name: A copy install leaves no symlinks behind
+        working-directory: app
+        run: |
+          set -euo pipefail
+          "$ZED" install --frozen --install-mode copy
+          test ! -L .vendor/.zed/zed-pkg-test/python-lib
+          test -z "$(find .vendor/.zed -type l -print -quit)"
+          PYTHONPATH="$(cat .zed/python_path)" python main.py
+
+      - name: Only the Python package was fetched
+        working-directory: app
+        run: |
+          set -euo pipefail
+          installed=.vendor/.zed/zed-pkg-test/python-lib
+          test -f "$installed/pyproject.toml"
+          test -f "$installed/python_lib/__init__.py"
+          # A Python consumer must not receive another ecosystem's manifests.
+          for stray in package.json go.mod Cargo.toml; do
+            if [ -e "$installed/$stray" ]; then
+              echo "::error::$stray leaked into the python package"
+              exit 1
+            fi
+          done
+
+      - name: Upload interoperability diagnostics
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: zed-python-e2e-log
+          path: ${{ runner.temp }}/python-app.log
+          if-no-files-found: warn
+          retention-days: 7

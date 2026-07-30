@@ -1,0 +1,20 @@
+[package]
+org = "zed-pkg-test"
+name = "python-app"
+version = "0.1.0"
+description = "A Python app sourcing one package via zed and the rest via pip."
+license = "MIT"
+
+[package.repository]
+vcs = "git"
+url = "https://github.com/zed-pkg-test/python-app"
+
+# Put zed-sourced deps here (not in site-packages); the python adapter adds this
+# to the import path and writes .zed/python_path.
+[install]
+dir = ".vendor/.zed"
+adapter = "python"
+
+# The ONE dep we source via zed instead of pip.
+[dependencies]
+"zed-pkg-test/python-lib" = "^1.0.0"

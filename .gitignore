@@ -1,0 +1,4 @@
+.vendor/
+.zed/
+.zpkg.lock
+__pycache__/
