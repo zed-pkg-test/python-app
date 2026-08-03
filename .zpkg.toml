@@ -2,19 +2,17 @@
 org = "zed-pkg-test"
 name = "python-app"
 version = "0.1.0"
-description = "A Python app sourcing one package via zed and the rest via pip."
+description = "Python consumer of a language-specific library and a universal schema package"
 license = "MIT"
 
 [package.repository]
 vcs = "git"
 url = "https://github.com/zed-pkg-test/python-app"
 
-# Put zed-sourced deps here (not in site-packages); the python adapter adds this
-# to the import path and writes .zed/python_path.
 [install]
 dir = ".vendor/.zed"
 adapter = "python"
 
-# The ONE dep we source via zed instead of pip.
 [dependencies]
-"zed-pkg-test/python-lib" = "^1.0.0"
+"zedtest/polyglot-lib-python" = "^0.1.0"
+"zedtest/shared-schema" = "^1.0.0"
