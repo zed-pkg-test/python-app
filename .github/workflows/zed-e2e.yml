@@ -89,7 +89,7 @@ jobs:
           "$ZED" install --install-mode symlink
           test -L .vendor/.zed/zedtest/polyglot-lib-python
           test -L .vendor/.zed/zedtest/shared-schema
-          python_path="$(cat .zed/python_path)"
+          python_path="$(cat .zed/pythonpath)"
           schema_path="$PWD/.vendor/.zed/zedtest/shared-schema/schemas/job-envelope.schema.json"
           export PYTHONPATH="$python_path"
           export ZED_SHARED_SCHEMA_PATH="$schema_path"
@@ -101,7 +101,7 @@ jobs:
           set -euo pipefail
           "$ZED" install --frozen --install-mode copy
           test -z "$(find .vendor/.zed -type l -print -quit)"
-          python_path="$(cat .zed/python_path)"
+          python_path="$(cat .zed/pythonpath)"
           schema_path="$PWD/.vendor/.zed/zedtest/shared-schema/schemas/job-envelope.schema.json"
           export PYTHONPATH="$python_path"
           export ZED_SHARED_SCHEMA_PATH="$schema_path"
