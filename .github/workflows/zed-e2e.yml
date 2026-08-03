@@ -89,8 +89,10 @@ jobs:
           "$ZED" install --install-mode symlink
           test -L .vendor/.zed/zedtest/polyglot-lib-python
           test -L .vendor/.zed/zedtest/shared-schema
-          export PYTHONPATH="$(cat .zed/python_path)"
-          export ZED_SHARED_SCHEMA_PATH="$PWD/.vendor/.zed/zedtest/shared-schema/schemas/job-envelope.schema.json"
+          python_path="$(cat .zed/python_path)"
+          schema_path="$PWD/.vendor/.zed/zedtest/shared-schema/schemas/job-envelope.schema.json"
+          export PYTHONPATH="$python_path"
+          export ZED_SHARED_SCHEMA_PATH="$schema_path"
           python main.py | tee "$RUNNER_TEMP/python-app.log"
           grep -q 'OK: both Zed source packages resolved' "$RUNNER_TEMP/python-app.log"
       - name: Frozen copy install is self-contained
@@ -99,8 +101,10 @@ jobs:
           set -euo pipefail
           "$ZED" install --frozen --install-mode copy
           test -z "$(find .vendor/.zed -type l -print -quit)"
-          export PYTHONPATH="$(cat .zed/python_path)"
-          export ZED_SHARED_SCHEMA_PATH="$PWD/.vendor/.zed/zedtest/shared-schema/schemas/job-envelope.schema.json"
+          python_path="$(cat .zed/python_path)"
+          schema_path="$PWD/.vendor/.zed/zedtest/shared-schema/schemas/job-envelope.schema.json"
+          export PYTHONPATH="$python_path"
+          export ZED_SHARED_SCHEMA_PATH="$schema_path"
           python main.py
           python - <<'PY'
           import json
