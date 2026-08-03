@@ -1,18 +1,32 @@
-"""python_lib is sourced via zed (into .vendor/.zed, put on the import path by
-the python adapter); everything else would come from pip."""
+"""Both dependencies are installed by Zed into the project-local vendor tree."""
 
+from __future__ import annotations
+
+import json
+import os
 import sys
+from pathlib import Path
 
-from python_lib import greet
+from polyglot_lib import greet
 
 
 def main() -> int:
-    msg = greet("python-app")
-    print(msg)
-    if "from zed-pkg-test/python-lib" not in msg:
-        print("FAIL: zed-sourced dependency did not resolve", file=sys.stderr)
+    message = greet("python-app")
+    print(message)
+    if message != "hello python-app from polyglot-lib/python":
+        print("FAIL: Python polyglot slice did not resolve", file=sys.stderr)
         return 1
-    print("OK: zed-sourced dep resolved alongside pip")
+
+    schema_path = os.environ.get("ZED_SHARED_SCHEMA_PATH")
+    if not schema_path:
+        print("FAIL: ZED_SHARED_SCHEMA_PATH is required", file=sys.stderr)
+        return 1
+    schema = json.loads(Path(schema_path).read_text(encoding="utf-8"))
+    if schema.get("title") != "JobEnvelope":
+        print("FAIL: shared schema package did not resolve", file=sys.stderr)
+        return 1
+
+    print("OK: both Zed source packages resolved")
     return 0
 
 
