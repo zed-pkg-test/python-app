@@ -2,3 +2,7 @@
 .zed/
 .zpkg.lock
 __pycache__/
+tmp
+temp
+tmp/worktrees
+temp/worktrees
